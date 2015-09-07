@@ -42,7 +42,7 @@ public final class Map {
 		// save key and value associated to it
 		currentKey = key
 		// break down the components of the key
-		currentValue = valueFor(ArraySlice(split(key) { $0 == "." }), JSONDictionary)
+		currentValue = valueFor(ArraySlice(key.characters.split { $0 == "." }.map { String($0) }), dictionary: JSONDictionary)
 
 		return self
 	}
@@ -93,8 +93,8 @@ private func valueFor(keyPathComponents: ArraySlice<String>, dictionary: [String
 			return nil
 
 		case let dict as [String : AnyObject] where keyPathComponents.count > 1:
-			let tail = dropFirst(keyPathComponents)
-			return valueFor(tail, dict)
+			let tail = keyPathComponents.dropFirst()
+			return valueFor(tail, dictionary: dict)
 
 		default:
 			return object
@@ -113,7 +113,7 @@ public final class Mapper<N: Mappable> {
 	// MARK: Mapping functions that map to an existing object toObject
 
 	/// Map a JSON string onto an existing object
-	public func map(JSONString: String, var toObject object: N) -> N {
+	public func map(JSONString: String, toObject object: N) -> N {
 		if let JSON = parseJSONDictionary(JSONString) {
 			return map(JSON, toObject: object)
 		}
@@ -121,7 +121,7 @@ public final class Mapper<N: Mappable> {
 	}
 
 	/// Maps a JSON object to an existing Mappable object if it is a JSON dictionary, or returns the passed object as is
-	public func map(JSON: AnyObject?, var toObject object: N) -> N {
+	public func map(JSON: AnyObject?, toObject object: N) -> N {
 		if let JSON = JSON as? [String : AnyObject] {
 			return map(JSON, toObject: object)
 		}
@@ -274,10 +274,16 @@ public final class Mapper<N: Mappable> {
 
 		var err: NSError?
 		if NSJSONSerialization.isValidJSONObject(JSONDict) {
-			let options: NSJSONWritingOptions = prettyPrint ? .PrettyPrinted : .allZeros
-			let JSONData: NSData? = NSJSONSerialization.dataWithJSONObject(JSONDict, options: options, error: &err)
+			let options: NSJSONWritingOptions = prettyPrint ? .PrettyPrinted : []
+			let JSONData: NSData?
+			do {
+				JSONData = try NSJSONSerialization.dataWithJSONObject(JSONDict, options: options)
+			} catch let error as NSError {
+				err = error
+				JSONData = nil
+			}
 			if let error = err {
-				println(error)
+				print(error)
 			}
 
 			if let JSON = JSONData {
@@ -310,7 +316,13 @@ public final class Mapper<N: Mappable> {
 		let data = JSON.dataUsingEncoding(NSUTF8StringEncoding, allowLossyConversion: true)
 		if let data = data {
 			var error: NSError?
-			let parsedJSON: AnyObject? = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions.AllowFragments, error: &error)
+			let parsedJSON: AnyObject?
+			do {
+				parsedJSON = try NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions.AllowFragments)
+			} catch let error1 as NSError {
+				error = error1
+				parsedJSON = nil
+			}
 			return parsedJSON
 		}
 
@@ -319,7 +331,7 @@ public final class Mapper<N: Mappable> {
 }
 
 extension Array {
-	internal func filterMap<U>(@noescape f: T -> U?) -> [U] {
+	internal func filterMap<U>(@noescape f: Element -> U?) -> [U] {
 		var mapped = [U]()
 
 		for value in self {
